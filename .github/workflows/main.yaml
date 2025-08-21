@@ -71,11 +71,16 @@ jobs:
           echo "SERVICE_IP=$SERVICE_IP" >> $GITHUB_ENV
 
       # 🔟 Run wrk load test (optional, install wrk first in your runner)
+      - name: Install wrk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wrk
+
       - name: Run wrk load test
         run: |
           echo "Running wrk against http://${{ env.SERVICE_IP }}"
           wrk -t2 -c10 -d30s -s wrk_post.lua http://${{ env.SERVICE_IP }}:8200/predict > wrk_output.txt
-
+      
       # 1️⃣1️⃣ Upload wrk output as artifact
       - name: Upload wrk output
         uses: actions/upload-artifact@v4
