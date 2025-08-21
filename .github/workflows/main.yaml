@@ -78,7 +78,7 @@ jobs:
 
       # 1️⃣1️⃣ Upload wrk output as artifact
       - name: Upload wrk output
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wrk-load-test
           path: wrk_output.txt
