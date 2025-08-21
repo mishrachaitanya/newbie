@@ -79,7 +79,7 @@ jobs:
       - name: Run wrk load test
         run: |
           echo "Running wrk against http://${{ env.SERVICE_IP }}"
-          wrk -t2 -c10 -d30s -s wrk_post.lua http://${{ env.SERVICE_IP }}:8200/predict > wrk_output.txt
+          wrk -t2 -c10 -d30s -s post.lua http://${{ env.SERVICE_IP }}:8200/predict > wrk_output.txt
       
       # 1️⃣1️⃣ Upload wrk output as artifact
       - name: Upload wrk output
