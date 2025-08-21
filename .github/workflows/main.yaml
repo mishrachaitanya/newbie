@@ -24,19 +24,11 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
-      # 4️⃣ Download model + metrics and build Docker image
-      - name: Download model and metrics, build Docker image
+      # 4️⃣ Build Docker image
+      - name: Build Docker image
         run: |
-          # Download model
-          gsutil cp gs://mlops-bucket-chaitanya/models/model.joblib model.joblib
-          
-          # Download metrics
-          gsutil cp gs://mlops-bucket-chaitanya/metrics/metrics_clean.json metrics_clean.json
-          gsutil cp gs://mlops-bucket-chaitanya/metrics/metrics_poisoned.json metrics_poisoned.json
-          
-          # Build Docker image
           IMAGE="us-central1-docker.pkg.dev/durable-unity-468703-a2/my-repo/demo_log:${GITHUB_SHA}"
-          docker build --build-arg MODEL_FILE=model.joblib -t $IMAGE .
+          docker build --build-arg MODEL_FILE=model_clean.joblib -t $IMAGE .
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       # 5️⃣ Push Docker image
@@ -89,4 +81,3 @@ jobs:
         with:
           name: wrk-load-test
           path: wrk_output.txt
-
