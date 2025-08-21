@@ -12,12 +12,19 @@ spec:
       labels:
         app: demo-log-ml-service
     spec:
-      serviceAccountName: telemetry-access  # See below
+      serviceAccountName: telemetry-access  # Existing SA with Cloud Trace permissions
       containers:
       - name: fastapi-container
         image: us-central1-docker.pkg.dev/durable-unity-468703-a2/my-repo/demo_log:latest
         ports:
         - containerPort: 8200
+        env:
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /secrets/sa-key.json
+        volumeMounts:
+        - name: sa-key
+          mountPath: /secrets
+          readOnly: true
         readinessProbe:
           httpGet:
             path: /ready_check
@@ -37,3 +44,7 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
+      volumes:
+      - name: sa-key
+        secret:
+          secretName: gcp-sa-key  # Kubernetes secret containing your SA JSON
