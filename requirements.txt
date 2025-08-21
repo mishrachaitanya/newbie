@@ -1,0 +1,28 @@
+fastapi
+
+pydantic
+joblib
+numpy
+pandas
+
+
+# OpenTelemetry core packages
+opentelemetry-api
+opentelemetry-sdk
+
+# Exporter for Google Cloud
+
+
+imblearn
+# requirements.txt
+
+
+uvicorn[standard]
+
+scikit-learn
+
+fairlearn
+# Exporter for Google Cloud Trace
+opentelemetry-exporter-gcp-trace
+google-cloud-storage
+mlflow

@@ -1,0 +1,85 @@
+name: CI/CD - Credit Card Fraud ML
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Authenticate to GCP
+      - name: Set up GCP credentials
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # 3️⃣ Configure Docker for Artifact Registry
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      # 4️⃣ Download model + Build Docker image
+      - name: Download model and build Docker image
+        run: |
+          gsutil cp gs://telco-churn/models/model.joblib model.joblib
+          IMAGE="us-central1-docker.pkg.dev/durable-unity-468703-a2/my-repo/demo_log:${GITHUB_SHA}"
+          docker build --build-arg MODEL_FILE=model.joblib -t $IMAGE .
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      # 5️⃣ Push Docker image
+      - name: Push Docker image
+        run: docker push $IMAGE
+
+      # 6️⃣ Get GKE credentials
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v1
+        with:
+          cluster_name: demo-log-ml-cluster-1
+          location: us-central1-a
+          project_id: durable-unity-468703-a2
+
+      # 7️⃣ Deploy manifests to GKE
+      - name: Deploy to GKE
+        run: |
+          sed -i "s|image: .*|image: $IMAGE|" deployment.yaml
+          kubectl apply -f deployment.yaml
+          kubectl apply -f service.yaml
+          kubectl apply -f hpa.yaml
+
+      # 8️⃣ Wait for external IP of service
+      - name: Wait for external IP
+        id: get_ip
+        run: |
+          echo "Waiting for external IP..."
+          SERVICE_IP=""
+          while [ -z "$SERVICE_IP" ]; do
+            sleep 5
+            SERVICE_IP=$(kubectl get svc demo-log-ml-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          done
+          echo "External IP: $SERVICE_IP"
+          echo "SERVICE_IP=$SERVICE_IP" >> $GITHUB_ENV
+
+      # 9️⃣ Run MLflow logger
+      - name: Run MLflow Logger
+        run: |
+          python mlflow_logger.py --mlflow_ip 34.28.84.185:8200
+
+      # 🔟 Run wrk load test
+      - name: Run wrk load test
+        run: |
+          echo "Running wrk against http://${{ env.SERVICE_IP }}"
+          wrk -t2 -c10 -d30s -s wrk_post.lua http://${{ env.SERVICE_IP }}:80/predict > wrk_output.txt
+
+      # 1️⃣1️⃣ Upload wrk output as artifact
+      - name: Upload wrk output
+        uses: actions/upload-artifact@v3
+        with:
+          name: wrk-load-test
+          path: wrk_output.txt
+
