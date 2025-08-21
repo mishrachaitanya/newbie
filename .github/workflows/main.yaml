@@ -31,11 +31,17 @@ jobs:
           docker build --build-arg MODEL_FILE=model_clean.joblib -t $IMAGE .
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      # 5️⃣ Push Docker image
+      # 5️⃣ Install Python dependencies for MLflow
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 6️⃣ Push Docker image
       - name: Push Docker image
         run: docker push $IMAGE
 
-      # 6️⃣ Get GKE credentials
+      # 7️⃣ Get GKE credentials
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v1
         with:
@@ -43,7 +49,7 @@ jobs:
           location: us-central1-a
           project_id: durable-unity-468703-a2
 
-      # 7️⃣ Deploy manifests to GKE
+      # 8️⃣ Deploy manifests to GKE
       - name: Deploy to GKE
         run: |
           sed -i "s|image: .*|image: $IMAGE|" deployment.yaml
@@ -51,7 +57,7 @@ jobs:
           kubectl apply -f service.yaml
           kubectl apply -f hpa.yaml
 
-      # 8️⃣ Wait for external IP of service
+      # 9️⃣ Wait for external IP of service
       - name: Wait for external IP
         id: get_ip
         run: |
@@ -64,18 +70,18 @@ jobs:
           echo "External IP: $SERVICE_IP"
           echo "SERVICE_IP=$SERVICE_IP" >> $GITHUB_ENV
 
-      # 9️⃣ Run MLflow logger
+      # 🔟 Run MLflow logger
       - name: Run MLflow Logger
         run: |
           python mlflow_logger.py --mlflow_ip 34.28.84.185:8200
 
-      # 🔟 Run wrk load test
+      # 1️⃣1️⃣ Run wrk load test
       - name: Run wrk load test
         run: |
           echo "Running wrk against http://${{ env.SERVICE_IP }}"
           wrk -t2 -c10 -d30s -s wrk_post.lua http://${{ env.SERVICE_IP }}:80/predict > wrk_output.txt
 
-      # 1️⃣1️⃣ Upload wrk output as artifact
+      # 1️⃣2️⃣ Upload wrk output as artifact
       - name: Upload wrk output
         uses: actions/upload-artifact@v4
         with:
