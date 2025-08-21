@@ -24,13 +24,21 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
-      # 4️⃣ Deploy MLflow server to GKE
-      - name: Deploy MLflow to GKE
-        run: |
-          kubectl apply -f mlflow_deployment.yaml
-          kubectl apply -f mlflow_service.yaml
+      # 4️⃣ Get GKE credentials for MLflow
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v1
+        with:
+          cluster_name: demo-log-ml-cluster-1
+          location: us-central1-a
+          project_id: durable-unity-468703-a2
 
-      # 5️⃣ Wait for MLflow external IP
+      # 5️⃣ Deploy MLflow to GKE
+      - name: Deploy MLflow
+        run: |
+          kubectl apply -f mlflow_deployment.yaml --validate=false
+          kubectl apply -f mlflow_service.yaml --validate=false
+
+      # 6️⃣ Wait for MLflow external IP
       - name: Wait for MLflow external IP
         id: mlflow_ip
         run: |
@@ -43,23 +51,23 @@ jobs:
           echo "MLflow IP: $MLFLOW_IP"
           echo "MLFLOW_IP=$MLFLOW_IP" >> $GITHUB_ENV
 
-      # 6️⃣ Run MLflow logger
+      # 7️⃣ Run MLflow logger
       - name: Run MLflow logger
         run: |
           python mlflow_logger.py --mlflow_ip ${{ env.MLFLOW_IP }}:5000
 
-      # 7️⃣ Build Docker image for ML model
+      # 8️⃣ Build Docker image for ML model
       - name: Build Docker image
         run: |
           IMAGE="us-central1-docker.pkg.dev/durable-unity-468703-a2/my-repo/demo_log:${GITHUB_SHA}"
           docker build --build-arg MODEL_FILE=model_clean.joblib -t $IMAGE .
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      # 8️⃣ Push Docker image
+      # 9️⃣ Push Docker image
       - name: Push Docker image
         run: docker push $IMAGE
 
-      # 9️⃣ Get GKE credentials for model service
+      # 🔟 Get GKE credentials for model service
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v1
         with:
@@ -67,7 +75,7 @@ jobs:
           location: us-central1-a
           project_id: durable-unity-468703-a2
 
-      # 🔟 Deploy model service manifests
+      # 1️⃣1️⃣ Deploy model service manifests
       - name: Deploy model service to GKE
         run: |
           sed -i "s|image: .*|image: $IMAGE|" deployment.yaml
@@ -75,7 +83,7 @@ jobs:
           kubectl apply -f service.yaml
           kubectl apply -f hpa.yaml
 
-      # 1️⃣1️⃣ Wait for external IP of model service
+      # 1️⃣2️⃣ Wait for external IP of model service
       - name: Wait for model service external IP
         id: get_ip
         run: |
@@ -88,19 +96,19 @@ jobs:
           echo "External IP: $SERVICE_IP"
           echo "SERVICE_IP=$SERVICE_IP" >> $GITHUB_ENV
 
-      # 1️⃣2️⃣ Install wrk
+      # 1️⃣3️⃣ Install wrk
       - name: Install wrk
         run: |
           sudo apt-get update
           sudo apt-get install -y wrk
 
-      # 1️⃣3️⃣ Run wrk load test
+      # 1️⃣4️⃣ Run wrk load test
       - name: Run wrk load test
         run: |
           echo "Running wrk against http://${{ env.SERVICE_IP }}"
           wrk -t2 -c10 -d30s -s post.lua http://${{ env.SERVICE_IP }}/predict > wrk_output.txt
 
-      # 1️⃣4️⃣ Upload wrk output as artifact
+      # 1️⃣5️⃣ Upload wrk output as artifact
       - name: Upload wrk output
         uses: actions/upload-artifact@v4
         with:
