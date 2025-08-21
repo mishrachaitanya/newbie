@@ -24,18 +24,42 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev
 
-      # 4️⃣ Build Docker image
+      # 4️⃣ Deploy MLflow server to GKE
+      - name: Deploy MLflow to GKE
+        run: |
+          kubectl apply -f mlflow-deployment.yaml
+          kubectl apply -f mlflow-service.yaml
+
+      # 5️⃣ Wait for MLflow external IP
+      - name: Wait for MLflow external IP
+        id: mlflow_ip
+        run: |
+          echo "Waiting for MLflow external IP..."
+          MLFLOW_IP=""
+          while [ -z "$MLFLOW_IP" ]; do
+            sleep 5
+            MLFLOW_IP=$(kubectl get svc mlflow-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          done
+          echo "MLflow IP: $MLFLOW_IP"
+          echo "MLFLOW_IP=$MLFLOW_IP" >> $GITHUB_ENV
+
+      # 6️⃣ Run MLflow logger
+      - name: Run MLflow logger
+        run: |
+          python mlflow_logger.py --mlflow_ip ${{ env.MLFLOW_IP }}:5000
+
+      # 7️⃣ Build Docker image for ML model
       - name: Build Docker image
         run: |
           IMAGE="us-central1-docker.pkg.dev/durable-unity-468703-a2/my-repo/demo_log:${GITHUB_SHA}"
           docker build --build-arg MODEL_FILE=model_clean.joblib -t $IMAGE .
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      # 5️⃣ Push Docker image
+      # 8️⃣ Push Docker image
       - name: Push Docker image
         run: docker push $IMAGE
 
-      # 6️⃣ Get GKE credentials
+      # 9️⃣ Get GKE credentials for model service
       - name: Get GKE credentials
         uses: google-github-actions/get-gke-credentials@v1
         with:
@@ -43,22 +67,16 @@ jobs:
           location: us-central1-a
           project_id: durable-unity-468703-a2
 
-      # 7️⃣ Create Kubernetes secret for GCP service account
-      - name: Create GCP service account secret
-        run: |
-          echo "${{ secrets.GCP_SA_KEY }}" > sa-key.json
-          kubectl create secret generic gcp-sa-key --from-file=sa-key.json=sa-key.json --dry-run=client -o yaml | kubectl apply -f -
-
-      # 8️⃣ Deploy manifests to GKE
-      - name: Deploy to GKE
+      # 🔟 Deploy model service manifests
+      - name: Deploy model service to GKE
         run: |
           sed -i "s|image: .*|image: $IMAGE|" deployment.yaml
           kubectl apply -f deployment.yaml
           kubectl apply -f service.yaml
           kubectl apply -f hpa.yaml
 
-      # 9️⃣ Wait for external IP of service
-      - name: Wait for external IP
+      # 1️⃣1️⃣ Wait for external IP of model service
+      - name: Wait for model service external IP
         id: get_ip
         run: |
           echo "Waiting for external IP..."
@@ -70,18 +88,19 @@ jobs:
           echo "External IP: $SERVICE_IP"
           echo "SERVICE_IP=$SERVICE_IP" >> $GITHUB_ENV
 
-      # 🔟 Run wrk load test (optional, install wrk first in your runner)
+      # 1️⃣2️⃣ Install wrk
       - name: Install wrk
         run: |
           sudo apt-get update
           sudo apt-get install -y wrk
 
+      # 1️⃣3️⃣ Run wrk load test
       - name: Run wrk load test
         run: |
           echo "Running wrk against http://${{ env.SERVICE_IP }}"
           wrk -t2 -c10 -d30s -s post.lua http://${{ env.SERVICE_IP }}/predict > wrk_output.txt
-      
-      # 1️⃣1️⃣ Upload wrk output as artifact
+
+      # 1️⃣4️⃣ Upload wrk output as artifact
       - name: Upload wrk output
         uses: actions/upload-artifact@v4
         with:
