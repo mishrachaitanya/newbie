@@ -27,8 +27,8 @@ jobs:
       # 4️⃣ Deploy MLflow server to GKE
       - name: Deploy MLflow to GKE
         run: |
-          kubectl apply -f mlflow-deployment.yaml
-          kubectl apply -f mlflow-service.yaml
+          kubectl apply -f mlflow_deployment.yaml
+          kubectl apply -f mlflow_service.yaml
 
       # 5️⃣ Wait for MLflow external IP
       - name: Wait for MLflow external IP
